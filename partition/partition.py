@@ -54,42 +54,55 @@ if not os.path.isdir(root + "features"):
 if not os.path.isdir(root + "superpoint_graphs"):
     os.mkdir(root + "superpoint_graphs")
 
+
+def write_components(file_name, components, in_component):
+            if os.path.isfile(file_name):
+                    os.remove(file_name)
+            data_file = h5py.File(file_name, 'w')
+            grp = data_file.create_group('components')
+            n_com = len(components)
+            for i_com in range(0, n_com):
+                grp.create_dataset(str(i_com), data=components[i_com], dtype='uint32')
+            data_file.create_dataset('in_component'
+                            ,   data=in_component, dtype='uint32')
+
+
 for folder in folders:
     print("=================\n   "+folder+"\n=================")
-    
+
     data_folder = root   + "data/"              + folder
     cloud_folder  = root + "clouds/"            + folder
     fea_folder  = root   + "features/"          + folder
     spg_folder  = root   + "superpoint_graphs/" + folder
     if not os.path.isdir(data_folder):
         raise ValueError("%s does not exist" % data_folder)
-        
+
     if not os.path.isdir(cloud_folder):
         os.mkdir(cloud_folder)
     if not os.path.isdir(fea_folder):
         os.mkdir(fea_folder)
     if not os.path.isdir(spg_folder):
         os.mkdir(spg_folder)
-    
-    if args.dataset=='s3dis':    
-        files = [os.path.join(data_folder, o) for o in os.listdir(data_folder) 
+
+    if args.dataset=='s3dis':
+        files = [os.path.join(data_folder, o) for o in os.listdir(data_folder)
                 if os.path.isdir(os.path.join(data_folder,o))]
     elif args.dataset=='sema3d':
         files = glob.glob(data_folder+"*.txt")
     elif args.dataset=='custom_dataset':
         #list all ply files in the folder
-        files = glob.glob(data_folder+"*.ply")
+        # files = glob.glob(data_folder+"*.ply")
         #list all las files in the folder
         files = glob.glob(data_folder+"*.las")
-        
+
     if (len(files) == 0):
         raise ValueError('%s is empty' % data_folder)
-        
+
     n_files = len(files)
     i_file = 0
     for file in files:
         file_name   = os.path.splitext(os.path.basename(file))[0]
-        
+
         if args.dataset=='s3dis':
             data_file   = data_folder      + file_name + '/' + file_name + ".txt"
             cloud_file  = cloud_folder     + file_name
@@ -104,11 +117,11 @@ for folder in folders:
             spg_file   = spg_folder  + file_name_short + '.h5'
         elif args.dataset=='custom_dataset':
             #adapt to your hierarchy. The following 4 files must be defined
-            data_file   = data_folder      + file_name + '.ply' #or .las
+            data_file   = data_folder      + file_name + '.las' #or .las
             cloud_file  = cloud_folder     + file_name
             fea_file    = fea_folder       + file_name + '.h5'
             spg_file    = spg_folder       + file_name + '.h5'
-        
+
         i_file = i_file + 1
         print(str(i_file) + " / " + str(n_files) + "---> "+file_name)
         #--- build the geometric feature file h5 file ---
@@ -133,14 +146,15 @@ for folder in folders:
             elif args.dataset=='custom_dataset':
                 #implement in provider.py your own read_custom_format outputing xyz, rgb, labels
                 #example for ply files
-                xyz, rgb, labels = read_ply(data_file)
+                # xyz, rgb, labels = read_ply(data_file)
                 #another one for las files without rgb
-                xyz = read_las(data_file)
-                if args.voxel_width > 0:
-                    #an example of pruning without labels
-                    xyz, rgb, labels = libply_c.prune(xyz, args.voxel_width, rgb, np.array(1,dtype='u1'), 0)
-                    #another one without rgb information nor labels
-                    xyz = libply_c.prune(xyz, args.voxel_width, np.zeros(xyz.shape,dtype='u1'), np.array(1,dtype='u1'), 0)[0]
+                xyz, rgb, num_returns, return_num, intensity = read_las(data_file)
+                labels = []
+                # if args.voxel_width > 0:
+                #     #an example of pruning without labels
+                #     xyz, rgb, labels = libply_c.prune(xyz, args.voxel_width, rgb, np.array(1,dtype='u1'), 0)
+                #     #another one without rgb information nor labels
+                #     xyz = libply_c.prune(xyz, args.voxel_width, np.zeros(xyz.shape,dtype='u1'), np.array(1,dtype='u1'), 0)[0]
                 #if no labels available simply set here labels = []
                 #if no rgb available simply set here rgb = [] and make sure to not use it later on
             start = timer()
@@ -171,19 +185,51 @@ for folder in folders:
                 #choose here which features to use for the partition
                  features = geof
                  geof[:,3] = 2. * geof[:, 3]
-                
+                #  n = np.subtract(num_returns, return_num)
+                #  scale_n = np.divide(n, np.max(n))
+                #  features = np.hstack((features, num_returns)).astype('float32')  # add num returns for partitioning
+                #  scale_intensity = np.divide(intensity, np.max(intensity))
+
+                #  x_min = np.min(xyz[:,0])
+                #  x_max = np.max(xyz[:,0])
+                #  y_min = np.min(xyz[:,1])
+                #  y_max = np.max(xyz[:,1])
+
+                #  xx = np.arange(x_min, xmax, 10.0)
+                #  yy = np.arange(y_min, ymax, 10.0)
+
+                #  s = np.zeros(shape=(len(xx)*len(yy), 2))
+                #  for i in range(0, len(xx)):
+                #     for j in range(0, len(yy)):
+                #         s[i,j] ==
+
+                #  features = np.hstack((features)).astype('float32')  # add num returns for partitioning
+
+                #  print(xyz.shape)
+                #  features = np.hstack((features, xyz[:,0:2])).astype('float32')
+                #  print(features.shape)
+
+                # BEST PARAMETERS SO FAR:
+                #  python partition/partition.py --dataset custom_dataset --ROOT_PATH $SEMA3D_DIR --voxel_width 0.05 --reg_strength 0.85 --ver_batch 5000000 --k_nn_geof 30 --k_nn_adj 10
+
             graph_nn["edge_weight"] = np.array(1. / ( args.lambda_edge_weight + graph_nn["distances"] / np.mean(graph_nn["distances"])), dtype = 'float32')
             print("        minimal partition...")
+            mode = 1.0
+            # 2.0 Fast
+            # 4.0 Custom speed
+            speed = 4.0
             components, in_component = libcp.cutpursuit(features, graph_nn["source"], graph_nn["target"]
-                                         , graph_nn["edge_weight"], args.reg_strength)
+                                         , graph_nn["edge_weight"], args.reg_strength)# mode, speed)
             components = np.array(components, dtype = 'object')
             end = timer()
             times[1] = times[1] + end - start
-            print("        computation of the SPG...")
-            start = timer()
-            graph_sp = compute_sp_graph(xyz, args.d_se_max, in_component, components, labels, n_labels)
-            end = timer()
-            times[2] = times[2] + end - start
-            write_spg(spg_file, graph_sp, components, in_component)
-        
+
+            write_components(spg_file, components, in_component)
+            # print("        computation of the SPG...")
+            # start = timer()
+            # graph_sp = compute_sp_graph(xyz, args.d_se_max, in_component, components, labels, n_labels)
+            # end = timer()
+            # times[2] = times[2] + end - start
+            # write_spg(spg_file, graph_sp, components, in_component)
+
         print("Timer : %5.1f / %5.1f / %5.1f " % (times[0], times[1], times[2]))

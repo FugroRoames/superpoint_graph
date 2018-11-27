@@ -35,6 +35,8 @@ def compute_graph_nn_2(xyz, k_nn1, k_nn2):
     del nn
     #---knn2---
     target2 = (neighbors[:, 1:].flatten()).astype('uint32')
+    print(neighbors.shape)
+    print(target2[0:50])
     #---knn1-----
     neighbors = neighbors[:, 1:k_nn1 + 1]
     distances = distances[:, 1:k_nn1 + 1]

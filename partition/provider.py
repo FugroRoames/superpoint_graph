@@ -14,7 +14,7 @@ from plyfile import PlyData, PlyElement
 import numpy as np
 from numpy import genfromtxt
 import h5py
-#import laspy
+import laspy
 from sklearn.neighbors import NearestNeighbors
 sys.path.append("./ply_c")
 sys.path.append("./partition/ply_c")
@@ -74,7 +74,7 @@ def error2ply(filename, xyz, rgb, labels, prediction):
         labels = np.argmax(labels, axis = 1)
     color_rgb = rgb/255;
     for i_ver in range(0, len(labels)):
-        
+
         color_hsv = list(colorsys.rgb_to_hsv(color_rgb[i_ver,0], color_rgb[i_ver,1], color_rgb[i_ver,2]))
         if (labels[i_ver] == prediction[i_ver]) or (labels[i_ver]==0):
             color_hsv[0] = 0.333333
@@ -89,7 +89,7 @@ def error2ply(filename, xyz, rgb, labels, prediction):
     for i in range(0, 3):
         vertex_all[prop[i][0]] = xyz[:, i]
     for i in range(0, 3):
-        vertex_all[prop[i+3][0]] = color_rgb[:, i]        
+        vertex_all[prop[i+3][0]] = color_rgb[:, i]
     ply = PlyData([PlyElement.describe(vertex_all, 'vertex')], text=True)
     ply.write(filename)
 #------------------------------------------------------------------------------
@@ -143,7 +143,7 @@ def get_color_from_label(object_label, dataset):
             1: [ 255, 0, 0], #'classe A' -> red
             2: [ 0, 255, 0], #'classeB' -> green
             }.get(object_label, -1)
-    else: 
+    else:
         raise ValueError('Unknown dataset: %s' % (dataset))
     if object_label == -1:
         raise ValueError('Type not recognized: %s' % (object_label))
@@ -197,7 +197,7 @@ def object_name_to_label(object_class):
     return object_label
 #------------------------------------------------------------------------------
 def read_semantic3d_format(data_file, n_class, file_label_path, voxel_width, ver_batch):
-    """read the format of semantic3d. 
+    """read the format of semantic3d.
     ver_batch : if ver_batch>0 then load the file ver_batch lines at a time.
                 useful for huge files (> 5millions lines)
     voxel_width: if voxel_width>0, voxelize data with a regular grid
@@ -219,7 +219,7 @@ def read_semantic3d_format(data_file, n_class, file_label_path, voxel_width, ver
             else:
                 vertices = np.genfromtxt(data_file, delimiter=' ')
                 break
-                
+
         except StopIteration:
             #end of file
             break
@@ -231,7 +231,7 @@ def read_semantic3d_format(data_file, n_class, file_label_path, voxel_width, ver
         if n_class > 0:
             labels_full = np.genfromtxt(file_label_path, dtype="u1", delimiter=' '
                         , max_rows=ver_batch, skip_header=i_rows)
-                
+
         if voxel_width > 0:
             if n_class > 0:
                 xyz_sub, rgb_sub, labels_sub = libply_c.prune(xyz_full, voxel_width
@@ -243,7 +243,7 @@ def read_semantic3d_format(data_file, n_class, file_label_path, voxel_width, ver
             del xyz_full, rgb_full
             xyz = np.vstack((xyz, xyz_sub))
             rgb = np.vstack((rgb, rgb_sub))
-        i_rows = i_rows + ver_batch        
+        i_rows = i_rows + ver_batch
     if n_class>0:
         return xyz, rgb, labels
     else:
@@ -277,7 +277,7 @@ def read_ply(filename):
 #------------------------------------------------------------------------------
 def read_las(filename):
     """convert from a las file with no rgb"""
-    #---read the ply file--------
+    #---read the las file--------
     try:
         inFile = laspy.file.File(filename, mode='r')
     except NameError:
@@ -287,7 +287,16 @@ def read_las(filename):
     y = np.reshape(inFile.Y, (N_points,1))
     z = np.reshape(inFile.Z, (N_points,1))
     xyz = np.hstack((x,y,z)).astype('f4')
-    return xyz
+    r = np.reshape(inFile.Red, (N_points,1))
+    g = np.reshape(inFile.Green, (N_points,1))
+    b = np.reshape(inFile.Blue, (N_points,1))
+    rgb = np.hstack((r,g,b)).astype('f4')
+
+    num_returns = np.reshape(inFile.num_returns, (N_points,1))
+    return_num = np.reshape(inFile.return_num, (N_points,1))
+    intensity = np.reshape(inFile.intensity, (N_points,1))
+    return xyz, rgb, num_returns, return_num, intensity
+
 #------------------------------------------------------------------------------
 def write_ply_obj(filename, xyz, rgb, labels, object_indices):
     """write into a ply file. include the label and the object number"""
